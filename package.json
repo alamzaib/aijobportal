@@ -15,10 +15,10 @@
     "install:backend": "cd backend && composer install",
     "install:ai": "cd ai && pip install -r requirements.txt",
     "install:all": "npm run install:frontend && npm run install:backend && npm run install:ai",
-    "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down",
-    "docker:build": "docker-compose build",
-    "docker:logs": "docker-compose logs -f"
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:build": "docker compose build",
+    "docker:logs": "docker compose logs -f"
   },
   "engines": {
     "node": ">=18.0.0",

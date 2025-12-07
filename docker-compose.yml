@@ -1,0 +1,116 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: taeab-postgres
+    environment:
+      POSTGRES_DB: taeab
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taeab-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: taeab-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taeab-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: taeab-backend
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=taeab
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - "8080:80"
+    volumes:
+      - ./backend:/var/www/html
+      - backend_storage:/var/www/html/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - taeab-network
+
+  ai:
+    build:
+      context: ./ai
+      dockerfile: Dockerfile.dev
+    container_name: taeab-ai
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/taeab
+      - REDIS_URL=redis://redis:6379
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ai:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - taeab-network
+    command: uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: taeab-frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080/api
+      - NEXT_PUBLIC_AI_SERVICE_URL=http://localhost:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+      - ai
+    networks:
+      - taeab-network
+
+networks:
+  taeab-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_storage:
+

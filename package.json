@@ -1,0 +1,28 @@
+{
+  "name": "taeab-monorepo",
+  "version": "1.0.0",
+  "description": "Taeab.com monorepo - Frontend (Next.js), Backend (Laravel), AI (FastAPI)",
+  "private": true,
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && php artisan serve",
+    "dev:ai": "cd ai && uvicorn main:app --reload --host 0.0.0.0 --port 8000",
+    "build:frontend": "cd frontend && npm run build",
+    "install:frontend": "cd frontend && npm install",
+    "install:backend": "cd backend && composer install",
+    "install:ai": "cd ai && pip install -r requirements.txt",
+    "install:all": "npm run install:frontend && npm run install:backend && npm run install:ai",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:build": "docker-compose build",
+    "docker:logs": "docker-compose logs -f"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
+

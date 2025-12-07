@@ -1,0 +1,90 @@
+# Dependencies
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.production
+.env.test
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.egg-info/
+.eggs/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+laravel.log
+storage/logs/*.log
+
+# Laravel specific
+backend/storage/framework/cache/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/bootstrap/cache/*
+backend/.phpunit.result.cache
+
+# Next.js specific
+frontend/.next/
+frontend/.vercel
+
+# Python specific
+ai/__pycache__/
+ai/*.pyc
+ai/.pytest_cache/
+ai/.mypy_cache/
+ai/.venv/
+ai/venv/
+ai/env/
+
+# Docker
+.dockerignore
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Coverage reports
+coverage/
+.nyc_output/
+*.lcov
+
+# Misc
+*.bak
+*.swp
+*.swo
+

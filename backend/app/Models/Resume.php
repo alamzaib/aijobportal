@@ -20,6 +20,8 @@ class Resume extends Model
         'title',
         'content',
         'file_path',
+        's3_url',
+        'parsed_json',
         'skills',
         'experience',
         'education',

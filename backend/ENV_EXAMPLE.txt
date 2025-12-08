@@ -38,7 +38,7 @@ QUEUE_CONNECTION=redis
 CACHE_STORE=redis
 CACHE_PREFIX=
 
-REDIS_CLIENT=phpredis
+REDIS_CLIENT=predis
 REDIS_HOST=127.0.0.1
 REDIS_PASSWORD=null
 REDIS_PORT=6379
@@ -47,12 +47,16 @@ REDIS_CACHE_DB=1
 
 MEMCACHED_HOST=127.0.0.1
 
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
+# AWS S3 Configuration for Resume Storage
+AWS_ACCESS_KEY_ID=your-access-key-id
+AWS_SECRET_ACCESS_KEY=your-secret-access-key
 AWS_DEFAULT_REGION=us-east-1
-AWS_BUCKET=
+AWS_BUCKET=your-bucket-name
 AWS_USE_PATH_STYLE_ENDPOINT=false
 AWS_ENDPOINT=
+# For S3-compatible storage (e.g., MinIO, DigitalOcean Spaces), set AWS_ENDPOINT
+# Example: AWS_ENDPOINT=https://nyc3.digitaloceanspaces.com
+# Example: AWS_ENDPOINT=http://localhost:9000 (for local MinIO)
 
 VITE_APP_NAME="${APP_NAME}"
 

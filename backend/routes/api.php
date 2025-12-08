@@ -3,6 +3,7 @@
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\JobController;
+use App\Http\Controllers\ResumeController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -60,4 +61,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Applications
     Route::get('/applications', [ApplicationController::class, 'index']);
     Route::post('/applications', [ApplicationController::class, 'apply']);
+    
+    // Resumes
+    Route::get('/resumes', [ResumeController::class, 'index']);
+    Route::post('/resumes', [ResumeController::class, 'store']);
 });

@@ -84,16 +84,31 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
-        // Logout using session
-        auth()->logout();
-        
-        // Invalidate session
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        try {
+            // Logout using session
+            auth()->logout();
+            
+            // Invalidate session
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
 
-        return response()->json([
-            'message' => 'Successfully logged out',
-        ]);
+            return response()->json([
+                'message' => 'Successfully logged out',
+            ]);
+        } catch (\Exception $e) {
+            // Log the error for debugging
+            \Log::error('Logout error: ' . $e->getMessage(), [
+                'exception' => $e,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            // Still try to logout even if session operations fail
+            auth()->logout();
+
+            return response()->json([
+                'message' => 'Logged out (session cleanup may have failed)',
+            ], 200);
+        }
     }
 
     /**

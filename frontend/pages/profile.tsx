@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/contexts/AuthContext';
+import ResumeUpload from '@/components/ResumeUpload';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -85,9 +86,7 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="pt-6 border-t border-gray-200">
-                  <p className="text-sm text-gray-500 italic">
-                    Profile editing will be available soon.
-                  </p>
+                  <ResumeUpload />
                 </div>
               </div>
             </div>

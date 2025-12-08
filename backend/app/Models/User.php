@@ -44,5 +44,21 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    /**
+     * Get the resumes for the user.
+     */
+    public function resumes()
+    {
+        return $this->hasMany(Resume::class);
+    }
+
+    /**
+     * Get the applications for the user.
+     */
+    public function applications()
+    {
+        return $this->hasMany(Application::class);
+    }
 }
 

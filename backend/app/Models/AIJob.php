@@ -10,6 +10,13 @@ class AIJob extends Model
 {
     use HasFactory;
 
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'ai_jobs';
+
     protected $fillable = [
         'job_id',
         'ai_generated_description',

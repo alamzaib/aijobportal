@@ -11,7 +11,7 @@ use Illuminate\Validation\ValidationException;
 class AuthController extends Controller
 {
     /**
-     * Register a new user.
+     * Register a new user and auto-login using session (for SPA).
      */
     public function register(Request $request): JsonResponse
     {
@@ -32,17 +32,21 @@ class AuthController extends Controller
             'password' => Hash::make($validated['password']),
         ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        // Auto-login using session (for SPA authentication)
+        auth()->login($user);
 
+        // Return user without password
         return response()->json([
-            'user' => $user,
-            'token' => $token,
-            'token_type' => 'Bearer',
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+            ],
         ], 201);
     }
 
     /**
-     * Login user and create token.
+     * Login user using session authentication (for SPA).
      */
     public function login(Request $request): JsonResponse
     {
@@ -51,7 +55,10 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        // Optimize query - select only needed fields
+        $user = User::select('id', 'name', 'email', 'password')
+            ->where('email', $request->email)
+            ->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
@@ -59,21 +66,30 @@ class AuthController extends Controller
             ]);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        // Login using session (for SPA authentication)
+        auth()->login($user);
 
+        // Return user without password
         return response()->json([
-            'user' => $user,
-            'token' => $token,
-            'token_type' => 'Bearer',
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+            ],
         ]);
     }
 
     /**
-     * Logout user (Revoke the token).
+     * Logout user (session-based for SPA).
      */
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        // Logout using session
+        auth()->logout();
+        
+        // Invalidate session
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         return response()->json([
             'message' => 'Successfully logged out',

@@ -11,6 +11,19 @@ use Illuminate\Support\Facades\DB;
 class ApplicationController extends Controller
 {
     /**
+     * Get authenticated user's applications.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $applications = Application::where('user_id', $request->user()->id)
+            ->with(['job.company', 'resume'])
+            ->orderBy('applied_at', 'desc')
+            ->get();
+
+        return response()->json($applications);
+    }
+
+    /**
      * Apply for a job.
      */
     public function apply(Request $request): JsonResponse

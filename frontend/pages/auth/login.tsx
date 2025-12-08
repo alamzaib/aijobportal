@@ -1,16 +1,47 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Layout from '@/components/Layout';
+import { apiClient, getErrorMessage } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface LoginResponse {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  token?: string;
+  token_type?: string;
+}
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login, user } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const csrfCookieFetched = useRef(false);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      router.push('/');
+    }
+  }, [user, router]);
+
+  // Pre-fetch CSRF cookie when page loads (optimization)
+  useEffect(() => {
+    if (!csrfCookieFetched.current) {
+      apiClient.get('/sanctum/csrf-cookie').catch(() => {
+        // Silently fail - will retry on submit if needed
+      });
+      csrfCookieFetched.current = true;
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,26 +49,27 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Replace with actual API call
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
-      const response = await fetch(`${apiUrl}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
+      // Ensure CSRF cookie is set (may have been pre-fetched)
+      try {
+        await apiClient.get('/sanctum/csrf-cookie');
+      } catch (csrfError) {
+        // If CSRF fails, continue anyway - might already be set
+      }
+
+      // Login (CSRF cookie should already be set from pre-fetch)
+      const data = await apiClient.post<LoginResponse>('/auth/login', {
+        email: formData.email,
+        password: formData.password,
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        // Store token (implement proper auth handling)
-        localStorage.setItem('token', data.token);
-        router.push('/');
-      } else {
-        setError('Invalid email or password');
-      }
+      // Update auth context with user data
+      login(data.user);
+
+      // Redirect to home page or return URL
+      const returnUrl = router.query.returnUrl as string || '/';
+      router.push(returnUrl);
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

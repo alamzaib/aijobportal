@@ -2,6 +2,34 @@ import { GetServerSideProps } from 'next';
 import Layout from '@/components/Layout';
 import JobCard from '@/components/JobCard';
 
+interface Company {
+  id: string;
+  name: string;
+}
+
+interface ApiJob {
+  id: string;
+  title: string;
+  description: string;
+  location: string | null;
+  type: string | null;
+  salary_min: number | null;
+  salary_max: number | null;
+  salary_currency: string;
+  requirements: string[] | null;
+  benefits: string[] | null;
+  posted_at: string | null;
+  company: Company;
+}
+
+interface PaginatedResponse {
+  data: ApiJob[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+}
+
 interface Job {
   id: string;
   title: string;
@@ -48,11 +76,15 @@ export default function Home({ featuredJobs }: HomeProps) {
         {/* Featured Jobs Section */}
         <section className="container mx-auto px-4 py-16">
           <h2 className="text-3xl font-bold mb-8 text-gray-900">Featured Jobs</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {featuredJobs.map((job) => (
-              <JobCard key={job.id} job={job} />
-            ))}
-          </div>
+          {featuredJobs.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {featuredJobs.map((job) => (
+                <JobCard key={job.id} job={job} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-600 text-center py-8">No featured jobs available at the moment.</p>
+          )}
         </section>
       </div>
     </Layout>
@@ -60,44 +92,69 @@ export default function Home({ featuredJobs }: HomeProps) {
 }
 
 export const getServerSideProps: GetServerSideProps = async ({ locale }) => {
-  // Mock data - replace with actual API call
-  const featuredJobs: Job[] = [
-    {
-      id: '1',
-      title: 'Senior Frontend Developer',
-      company: 'Tech Corp',
-      location: 'Remote',
-      type: 'Full-time',
-      salary: '$80,000 - $120,000',
-      postedAt: '2 days ago',
-      slug: 'senior-frontend-developer',
-    },
-    {
-      id: '2',
-      title: 'Backend Engineer',
-      company: 'StartupXYZ',
-      location: 'New York, NY',
-      type: 'Full-time',
-      salary: '$90,000 - $130,000',
-      postedAt: '1 week ago',
-      slug: 'backend-engineer',
-    },
-    {
-      id: '3',
-      title: 'UI/UX Designer',
-      company: 'Design Studio',
-      location: 'San Francisco, CA',
-      type: 'Contract',
-      salary: '$60,000 - $80,000',
-      postedAt: '3 days ago',
-      slug: 'ui-ux-designer',
-    },
-  ];
+  try {
+    // For server-side requests in Docker, use the service name instead of localhost
+    const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+    
+    // Fetch featured jobs (first 6 active jobs)
+    const params = new URLSearchParams();
+    params.append('page', '1');
+    params.append('per_page', '6');
 
-  return {
-    props: {
-      featuredJobs,
-    },
-  };
+    const response = await fetch(`${API_URL}/jobs?${params.toString()}`, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch jobs: ${response.statusText}`);
+    }
+
+    const data: PaginatedResponse = await response.json();
+
+    // Helper function to format job data (same as jobs/index.tsx)
+    const formatJob = (apiJob: ApiJob): Job => {
+      const salaryStr = apiJob.salary_min && apiJob.salary_max
+        ? `${apiJob.salary_currency || 'USD'} ${apiJob.salary_min.toLocaleString()} - ${apiJob.salary_max.toLocaleString()}`
+        : undefined;
+
+      const postedAt = apiJob.posted_at
+        ? new Date(apiJob.posted_at).toLocaleDateString()
+        : 'Recently';
+
+      // Generate slug from title and id (format: title-slug--uuid)
+      // Using double dash as delimiter to separate title from UUID
+      const titleSlug = apiJob.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const slug = `${titleSlug}--${apiJob.id}`;
+
+      return {
+        id: apiJob.id,
+        title: apiJob.title,
+        company: apiJob.company?.name || 'Unknown Company',
+        location: apiJob.location || 'Not specified',
+        type: apiJob.type || 'Not specified',
+        salary: salaryStr,
+        postedAt,
+        slug,
+      };
+    };
+
+    const featuredJobs = data.data.map(formatJob);
+
+    return {
+      props: {
+        featuredJobs,
+      },
+    };
+  } catch (error) {
+    console.error('Error fetching featured jobs:', error);
+    // Return empty array on error
+    return {
+      props: {
+        featuredJobs: [],
+      },
+    };
+  }
 };
 

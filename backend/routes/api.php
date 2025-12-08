@@ -14,6 +14,12 @@ Route::get('/status', function () {
     ]);
 });
 
+// CSRF cookie route (must be before auth routes for SPA)
+// Optimized: Minimal response, no unnecessary processing
+Route::get('/sanctum/csrf-cookie', function () {
+    return response()->noContent();
+});
+
 // Public routes
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
@@ -22,7 +28,24 @@ Route::prefix('auth')->group(function () {
 
 // Public job routes
 Route::get('/jobs', [JobController::class, 'index']);
-Route::get('/jobs/{id}', [JobController::class, 'show']);
+Route::get('/jobs/{id}', [JobController::class, 'show'])->where('id', '.*'); // Allow any characters including slashes
+
+// Debug route - shows available job slugs (remove in production)
+Route::get('/jobs-debug/slugs', function () {
+    $jobs = \App\Models\Job::where('is_active', true)->get();
+    $slugs = $jobs->map(function ($job) {
+        $slug = strtolower($job->title);
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
+        $slug = trim($slug, '-');
+        return [
+            'id' => $job->id,
+            'title' => $job->title,
+            'slug' => $slug,
+            'full_slug' => $slug . '--' . $job->id
+        ];
+    });
+    return response()->json($slugs);
+});
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -35,5 +58,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/jobs', [JobController::class, 'store']);
     
     // Applications
+    Route::get('/applications', [ApplicationController::class, 'index']);
     Route::post('/applications', [ApplicationController::class, 'apply']);
 });

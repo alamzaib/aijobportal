@@ -1,5 +1,6 @@
 import type { AppProps } from 'next/app';
 import { useRouter } from 'next/router';
+import { AuthProvider } from '@/contexts/AuthContext';
 import '@/app/globals.css';
 
 export default function App({ Component, pageProps }: AppProps) {
@@ -11,6 +12,10 @@ export default function App({ Component, pageProps }: AppProps) {
     document.documentElement.lang = router.locale || 'en';
   }
 
-  return <Component {...pageProps} />;
+  return (
+    <AuthProvider>
+      <Component {...pageProps} />
+    </AuthProvider>
+  );
 }
 

@@ -2,6 +2,26 @@ import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
 import Layout from '@/components/Layout';
 
+interface Company {
+  id: string;
+  name: string;
+}
+
+interface ApiJob {
+  id: string;
+  title: string;
+  description: string;
+  location: string | null;
+  type: string | null;
+  salary_min: number | null;
+  salary_max: number | null;
+  salary_currency: string;
+  requirements: string[] | null;
+  benefits: string[] | null;
+  posted_at: string | null;
+  company: Company;
+}
+
 interface Job {
   id: string;
   title: string;
@@ -104,43 +124,87 @@ export default function JobDetailPage({ job }: JobDetailProps) {
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async ({ params, locale }) => {
+export const getServerSideProps: GetServerSideProps = async ({ params }) => {
   const slug = params?.slug as string;
 
-  // Mock data - replace with actual API call
-  const job: Job = {
-    id: '1',
-    title: 'Senior Frontend Developer',
-    company: 'Tech Corp',
-    location: 'Remote',
-    type: 'Full-time',
-    salary: '$80,000 - $120,000',
-    postedAt: '2 days ago',
-    description: `We are looking for an experienced Frontend Developer to join our team. You will be responsible for building user-facing web applications using modern JavaScript frameworks.
+  try {
+    // Backend now supports both UUID and slug formats
+    // Pass the slug as-is - backend will handle UUID extraction or title matching
+    // For server-side requests in Docker, use the service name instead of localhost
+    // Check if we're in Docker (server-side) by looking for internal API URL env var
+    const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+    const url = `${API_URL}/jobs/${encodeURIComponent(slug)}`;
+    
+    console.log('[getServerSideProps] Fetching job:', url);
+    
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+      },
+      // Add cache control to prevent caching issues
+      cache: 'no-store',
+    });
 
-You will work closely with our design and backend teams to create seamless user experiences. The ideal candidate has a strong understanding of React, TypeScript, and modern web development practices.`,
-    requirements: [
-      '5+ years of experience in frontend development',
-      'Strong proficiency in React and TypeScript',
-      'Experience with Next.js or similar frameworks',
-      'Knowledge of Tailwind CSS or similar CSS frameworks',
-      'Understanding of RESTful APIs',
-      'Experience with version control (Git)',
-    ],
-    benefits: [
-      'Competitive salary and equity',
-      'Health, dental, and vision insurance',
-      'Flexible working hours',
-      'Remote work options',
-      'Professional development budget',
-      'Unlimited PTO',
-    ],
-  };
+    console.log('[getServerSideProps] Response status:', response.status);
 
-  return {
-    props: {
-      job,
-    },
-  };
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('[getServerSideProps] Error response:', errorData);
+      
+      if (response.status === 404) {
+        // Log available jobs for debugging
+        try {
+          const debugResponse = await fetch(`${API_URL}/jobs-debug/slugs`);
+          if (debugResponse.ok) {
+            const availableJobs = await debugResponse.json();
+            console.log('[getServerSideProps] Available job slugs:', availableJobs.map((j: any) => j.slug));
+          }
+        } catch (e) {
+          // Ignore debug endpoint errors
+        }
+        
+        return {
+          notFound: true,
+        };
+      }
+      throw new Error(`Failed to fetch job: ${response.statusText}`);
+    }
+
+    const apiJob: ApiJob = await response.json();
+    console.log('[getServerSideProps] Job found:', apiJob.title);
+
+    // Format the job data
+    const salaryStr = apiJob.salary_min && apiJob.salary_max
+      ? `${apiJob.salary_currency || 'USD'} ${apiJob.salary_min.toLocaleString()} - ${apiJob.salary_max.toLocaleString()}`
+      : undefined;
+
+    const postedAt = apiJob.posted_at
+      ? new Date(apiJob.posted_at).toLocaleDateString()
+      : 'Recently';
+
+    const job: Job = {
+      id: apiJob.id,
+      title: apiJob.title,
+      company: apiJob.company?.name || 'Unknown Company',
+      location: apiJob.location || 'Not specified',
+      type: apiJob.type || 'Not specified',
+      salary: salaryStr,
+      postedAt,
+      description: apiJob.description,
+      requirements: apiJob.requirements || [],
+      benefits: apiJob.benefits || [],
+    };
+
+    return {
+      props: {
+        job,
+      },
+    };
+  } catch (error) {
+    console.error('Error fetching job:', error);
+    return {
+      notFound: true,
+    };
+  }
 };
 

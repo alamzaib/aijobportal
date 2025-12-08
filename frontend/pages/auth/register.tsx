@@ -1,10 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Layout from '@/components/Layout';
+import { apiClient, getErrorMessage } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface RegisterResponse {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  token?: string;
+  token_type?: string;
+}
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -13,39 +26,34 @@ export default function RegisterPage() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const csrfCookieFetched = useRef(false);
+
+  // Pre-fetch CSRF cookie when page loads (optimization)
+  useEffect(() => {
+    if (!csrfCookieFetched.current) {
+      apiClient.get('/sanctum/csrf-cookie').catch(() => {
+        // Silently fail - will retry on submit if needed
+      });
+      csrfCookieFetched.current = true;
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
 
-    // Get form values directly from the form element as a fallback
-    const form = e.currentTarget;
-    const formDataObj = new FormData(form);
-    const directPassword = formDataObj.get('password') as string;
-    const directConfirmPassword = formDataObj.get('confirmPassword') as string;
-
-    // Use state values, but fallback to direct form values if state is empty
-    const currentPassword = formData.password || directPassword;
-    const currentConfirmPassword = formData.confirmPassword || directConfirmPassword;
-
-    console.log('=== DEBUG INFO ===');
-    console.log('State formData:', formData);
-    console.log('Direct form values - password:', directPassword);
-    console.log('Direct form values - confirmPassword:', directConfirmPassword);
-    console.log('Using - password:', currentPassword);
-    console.log('Using - confirmPassword:', currentConfirmPassword);
-
-    if (!currentConfirmPassword) {
+    // Client-side validation
+    if (!formData.confirmPassword) {
       setError('Please confirm your password');
       return;
     }
 
-    if (currentPassword !== currentConfirmPassword) {
+    if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
-    if (currentPassword.length < 8) {
+    if (formData.password.length < 8) {
       setError('Password must be at least 8 characters');
       return;
     }
@@ -53,43 +61,30 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // Replace with actual API call
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-      
-      // Explicitly ensure password_confirmation is included
-      const requestBody: Record<string, string> = {
-        name: (formData.name || formDataObj.get('name') as string || '').trim(),
-        email: (formData.email || formDataObj.get('email') as string || '').trim(),
-        password: currentPassword,
-        password_confirmation: currentConfirmPassword, // Always use confirmPassword
-      };
-      
-      console.log('Final request body:', requestBody);
-      console.log('Final request body JSON:', JSON.stringify(requestBody));
-      
-      const response = await fetch(`${apiUrl}/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
+      // Ensure CSRF cookie is set (may have been pre-fetched)
+      try {
+        await apiClient.get('/sanctum/csrf-cookie');
+      } catch (csrfError) {
+        // If CSRF fails, continue anyway - might already be set
+      }
+
+      // Register (CSRF cookie should already be set from pre-fetch)
+      const data = await apiClient.post<RegisterResponse>('/auth/register', {
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+        password_confirmation: formData.confirmPassword,
       });
 
-      if (response.ok) {
-        router.push('/auth/login');
+      // Auto-login after registration
+      if (data.user) {
+        login(data.user);
+        router.push('/');
       } else {
-        const data = await response.json();
-        // Handle validation errors
-        if (data.errors) {
-          const errorMessages = Object.values(data.errors).flat();
-          setError(errorMessages.join(', ') || 'Registration failed. Please try again.');
-        } else {
-          setError(data.message || 'Registration failed. Please try again.');
-        }
+        router.push('/auth/login');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }

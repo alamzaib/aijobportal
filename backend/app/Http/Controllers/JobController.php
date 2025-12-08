@@ -43,13 +43,67 @@ class JobController extends Controller
 
     /**
      * Display the specified job.
+     * Supports both UUID and slug formats.
      */
     public function show(string $id): JsonResponse
     {
-        $job = Job::with(['company', 'aiJob'])
-            ->findOrFail($id);
+        try {
+            // Decode URL-encoded slug
+            $id = urldecode($id);
+            
+            $job = Job::findBySlugOrId($id);
+            
+            if (!$job) {
+                // Get list of available job slugs for debugging
+                $availableJobs = Job::where('is_active', true)
+                    ->get()
+                    ->map(function ($j) {
+                        $slug = strtolower($j->title);
+                        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
+                        $slug = trim($slug, '-');
+                        return [
+                            'id' => $j->id,
+                            'title' => $j->title,
+                            'slug' => $slug
+                        ];
+                    })
+                    ->toArray();
+                
+                \Log::warning('Job not found', [
+                    'identifier' => $id,
+                    'available_jobs' => $availableJobs
+                ]);
+                
+                return response()->json([
+                    'message' => 'Job not found',
+                    'identifier' => $id,
+                    'available_jobs' => config('app.debug') ? $availableJobs : null
+                ], 404);
+            }
 
-        return response()->json($job);
+            // Load relationships - make aiJob optional since table might not exist
+            $job->load('company');
+            
+            // Only load aiJob if the table exists
+            try {
+                $job->load('aiJob');
+            } catch (\Exception $e) {
+                // Table doesn't exist or relationship fails - that's OK, continue without it
+                \Log::debug('Could not load aiJob relationship: ' . $e->getMessage());
+            }
+
+            return response()->json($job);
+        } catch (\Exception $e) {
+            \Log::error('Job lookup error: ' . $e->getMessage(), [
+                'identifier' => $id ?? 'unknown',
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'message' => 'Error finding job',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
     }
 
     /**

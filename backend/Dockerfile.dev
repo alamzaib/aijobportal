@@ -9,13 +9,13 @@ RUN apk add --no-cache \
     libxml2-dev \
     zip \
     unzip \
-    postgresql-dev \
+    mysql-dev \
     oniguruma-dev \
     nginx \
     supervisor
 
-# Install PHP extensions
-RUN docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath gd opcache
+# Install PHP extensions (MySQL instead of PostgreSQL)
+RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd opcache
 
 # Install Redis extension
 RUN apk add --no-cache pcre-dev $PHPIZE_DEPS \
@@ -31,11 +31,14 @@ WORKDIR /var/www/html
 # Copy composer files
 COPY composer.json composer.lock ./
 
-# Install dependencies (including dev)
-RUN composer install --no-interaction
+# Install dependencies (including dev) - skip scripts since artisan doesn't exist yet
+RUN composer install --no-interaction --no-scripts
 
 # Copy application files
 COPY . .
+
+# Now run composer scripts since artisan exists
+RUN composer dump-autoload --optimize && php artisan package:discover --ansi
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html \

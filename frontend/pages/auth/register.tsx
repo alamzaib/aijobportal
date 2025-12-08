@@ -14,16 +14,38 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
 
-    if (formData.password !== formData.confirmPassword) {
+    // Get form values directly from the form element as a fallback
+    const form = e.currentTarget;
+    const formDataObj = new FormData(form);
+    const directPassword = formDataObj.get('password') as string;
+    const directConfirmPassword = formDataObj.get('confirmPassword') as string;
+
+    // Use state values, but fallback to direct form values if state is empty
+    const currentPassword = formData.password || directPassword;
+    const currentConfirmPassword = formData.confirmPassword || directConfirmPassword;
+
+    console.log('=== DEBUG INFO ===');
+    console.log('State formData:', formData);
+    console.log('Direct form values - password:', directPassword);
+    console.log('Direct form values - confirmPassword:', directConfirmPassword);
+    console.log('Using - password:', currentPassword);
+    console.log('Using - confirmPassword:', currentConfirmPassword);
+
+    if (!currentConfirmPassword) {
+      setError('Please confirm your password');
+      return;
+    }
+
+    if (currentPassword !== currentConfirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
-    if (formData.password.length < 8) {
+    if (currentPassword.length < 8) {
       setError('Password must be at least 8 characters');
       return;
     }
@@ -32,24 +54,39 @@ export default function RegisterPage() {
 
     try {
       // Replace with actual API call
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+      
+      // Explicitly ensure password_confirmation is included
+      const requestBody: Record<string, string> = {
+        name: (formData.name || formDataObj.get('name') as string || '').trim(),
+        email: (formData.email || formDataObj.get('email') as string || '').trim(),
+        password: currentPassword,
+        password_confirmation: currentConfirmPassword, // Always use confirmPassword
+      };
+      
+      console.log('Final request body:', requestBody);
+      console.log('Final request body JSON:', JSON.stringify(requestBody));
+      
       const response = await fetch(`${apiUrl}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (response.ok) {
         router.push('/auth/login');
       } else {
         const data = await response.json();
-        setError(data.message || 'Registration failed. Please try again.');
+        // Handle validation errors
+        if (data.errors) {
+          const errorMessages = Object.values(data.errors).flat();
+          setError(errorMessages.join(', ') || 'Registration failed. Please try again.');
+        } else {
+          setError(data.message || 'Registration failed. Please try again.');
+        }
       }
     } catch (err) {
       setError('An error occurred. Please try again.');

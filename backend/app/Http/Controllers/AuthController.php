@@ -15,6 +15,11 @@ class AuthController extends Controller
      */
     public function register(Request $request): JsonResponse
     {
+        // Ensure JSON data is merged into request
+        if ($request->isJson() && $request->json()->all()) {
+            $request->merge($request->json()->all());
+        }
+        
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',

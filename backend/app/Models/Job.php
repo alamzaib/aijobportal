@@ -29,6 +29,7 @@ class Job extends Model
         'requirements',
         'benefits',
         'is_active',
+        'status',
         'posted_at',
     ];
 
@@ -36,6 +37,7 @@ class Job extends Model
         'requirements' => 'array',
         'benefits' => 'array',
         'is_active' => 'boolean',
+        'status' => 'string',
         'posted_at' => 'datetime',
         'salary_min' => 'decimal:2',
         'salary_max' => 'decimal:2',

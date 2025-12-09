@@ -108,6 +108,15 @@ export default function Layout({ children }: LayoutProps) {
                           >
                             My Applications
                           </Link>
+                          {user.roles && user.roles.includes('Admin') && (
+                            <Link
+                              href="/admin"
+                              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                              onClick={() => setShowUserMenu(false)}
+                            >
+                              Admin Panel
+                            </Link>
+                          )}
                           <button
                             onClick={() => {
                               setShowUserMenu(false);

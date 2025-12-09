@@ -10,6 +10,7 @@ interface LoginResponse {
     id: string;
     name: string;
     email: string;
+    roles?: string[];
   };
   token?: string;
   token_type?: string;
@@ -62,12 +63,17 @@ export default function LoginPage() {
         password: formData.password,
       });
 
-      // Update auth context with user data
-      login(data.user);
+      // Update auth context with user data (including roles)
+      const userData = {
+        ...data.user,
+        roles: data.user.roles || [],
+      };
+      login(userData);
 
-      // Redirect to home page or return URL
+      // Use window.location for hard redirect to ensure clean state
+      // This bypasses Next.js router and ensures cookies are properly set
       const returnUrl = router.query.returnUrl as string || '/';
-      router.push(returnUrl);
+      window.location.href = returnUrl;
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

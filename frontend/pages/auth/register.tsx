@@ -10,6 +10,7 @@ interface RegisterResponse {
     id: string;
     name: string;
     email: string;
+    roles?: string[];
   };
   token?: string;
   token_type?: string;
@@ -78,10 +79,15 @@ export default function RegisterPage() {
 
       // Auto-login after registration
       if (data.user) {
-        login(data.user);
-        router.push('/');
+        const userData = {
+          ...data.user,
+          roles: data.user.roles || [],
+        };
+        login(userData);
+        // Use window.location for hard redirect to ensure clean state
+        window.location.href = '/';
       } else {
-        router.push('/auth/login');
+        window.location.href = '/auth/login';
       }
     } catch (err) {
       setError(getErrorMessage(err));

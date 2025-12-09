@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CompanyJobController;
@@ -70,4 +71,35 @@ Route::middleware('auth:sanctum')->group(function () {
     // Resumes
     Route::get('/resumes', [ResumeController::class, 'index']);
     Route::post('/resumes', [ResumeController::class, 'store']);
+
+    // Debug route to check user roles
+    Route::get('/debug/user-roles', function (Request $request) {
+        $user = $request->user();
+        $user->load('roles');
+        
+        return response()->json([
+            'user_id' => $user->id,
+            'user_email' => $user->email,
+            'user_roles' => $user->roles->pluck('name')->toArray(),
+            'has_admin_role' => $user->hasRole('Admin'),
+            'all_roles' => \Spatie\Permission\Models\Role::pluck('name')->toArray(),
+        ]);
+    });
+});
+
+// Admin routes (protected by both auth and admin middleware)
+Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
+    // Dashboard
+    Route::get('/dashboard', [AdminController::class, 'dashboard']);
+
+    // Job management
+    Route::get('/jobs', [AdminController::class, 'jobs']);
+    Route::post('/jobs/{id}/approve', [AdminController::class, 'approveJob']);
+    Route::post('/jobs/{id}/reject', [AdminController::class, 'rejectJob']);
+
+    // User management
+    Route::get('/users', [AdminController::class, 'users']);
+    Route::post('/users/{id}/block', [AdminController::class, 'blockUser']);
+    Route::post('/users/{id}/unblock', [AdminController::class, 'unblockUser']);
+    Route::post('/users/{id}/assign-role', [AdminController::class, 'assignRole']);
 });

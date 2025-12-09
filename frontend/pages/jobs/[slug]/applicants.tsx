@@ -1,6 +1,6 @@
 import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiClient, getErrorMessage } from '@/lib/api';
@@ -55,6 +55,7 @@ interface Application {
   cover_letter: string | null;
   status: string;
   applied_at: string;
+  score: number | null;
 }
 
 interface ApplicantsPageProps {
@@ -68,12 +69,43 @@ export default function ApplicantsPage({ job, initialApplications }: ApplicantsP
   const [applications, setApplications] = useState<Application[]>(initialApplications);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [sortBy, setSortBy] = useState<'applied_at' | 'score'>('applied_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
     if (!authLoading && user === null) {
       router.push('/auth/login?returnUrl=' + encodeURIComponent(router.asPath));
     }
   }, [user, authLoading, router]);
+
+  const fetchApplications = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const slug = router.query.slug as string;
+      let jobId = slug;
+      if (slug?.includes('--')) {
+        const parts = slug.split('--');
+        jobId = parts[parts.length - 1];
+      }
+      
+      const response = await apiClient.get<{ job: Job; applications: Application[] }>(
+        `/jobs/${encodeURIComponent(jobId)}/applications?sort_by=${sortBy}&sort_order=${sortOrder}`
+      );
+      setApplications(response.applications);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [router.query.slug, sortBy, sortOrder]);
+
+  useEffect(() => {
+    // Only fetch when sort changes, not on initial mount (we have initialApplications)
+    if (sortBy !== 'applied_at' || sortOrder !== 'desc') {
+      fetchApplications();
+    }
+  }, [sortBy, sortOrder, fetchApplications]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -137,8 +169,37 @@ export default function ApplicantsPage({ job, initialApplications }: ApplicantsP
           </button>
 
           <div className="mb-6">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Applicants for {job.title}</h1>
-            <p className="text-gray-600">{job.company.name}</p>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Applicants for {job.title}</h1>
+                <p className="text-gray-600">{job.company.name}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium text-gray-700">Sort by:</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => {
+                    setSortBy(e.target.value as 'applied_at' | 'score');
+                    if (e.target.value === 'score') {
+                      setSortOrder('desc');
+                    }
+                  }}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="applied_at">Date Applied</option>
+                  <option value="score">Match Score</option>
+                </select>
+                {sortBy === 'applied_at' && (
+                  <button
+                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                    className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    title={sortOrder === 'asc' ? 'Sort ascending' : 'Sort descending'}
+                  >
+                    {sortOrder === 'asc' ? '↑' : '↓'}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           {error && (
@@ -147,7 +208,11 @@ export default function ApplicantsPage({ job, initialApplications }: ApplicantsP
             </div>
           )}
 
-          {applications.length === 0 ? (
+          {loading ? (
+            <div className="bg-white rounded-lg shadow-md p-8 text-center">
+              <p className="text-gray-600">Loading applications...</p>
+            </div>
+          ) : applications.length === 0 ? (
             <div className="bg-white rounded-lg shadow-md p-8 text-center">
               <p className="text-gray-600">No applications yet.</p>
             </div>
@@ -163,9 +228,16 @@ export default function ApplicantsPage({ job, initialApplications }: ApplicantsP
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
-                        <h2 className="text-xl font-semibold text-gray-900 mb-1">
-                          {parsedCv?.name || application.user.name}
-                        </h2>
+                        <div className="flex items-center gap-3 mb-1">
+                          <h2 className="text-xl font-semibold text-gray-900">
+                            {parsedCv?.name || application.user.name}
+                          </h2>
+                          {application.score !== null && (
+                            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-medium">
+                              {application.score.toFixed(1)}% Match
+                            </span>
+                          )}
+                        </div>
                         <p className="text-gray-600 text-sm mb-2">
                           {parsedCv?.email || application.user.email}
                           {parsedCv?.phone && ` • ${parsedCv.phone}`}

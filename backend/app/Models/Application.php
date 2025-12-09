@@ -17,10 +17,12 @@ class Application extends Model
         'cover_letter',
         'status',
         'applied_at',
+        'score',
     ];
 
     protected $casts = [
         'applied_at' => 'datetime',
+        'score' => 'decimal:2',
     ];
 
     /**

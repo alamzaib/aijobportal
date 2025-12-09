@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\CalculateMatchScoreJob;
 use App\Models\Application;
 use App\Models\Job;
 use Illuminate\Http\Request;
@@ -62,6 +63,11 @@ class ApplicationController extends Controller
             'applied_at' => now(),
         ]);
 
+        // Dispatch job to calculate match score asynchronously
+        if ($application->resume_id) {
+            CalculateMatchScoreJob::dispatch($application->id);
+        }
+
         return response()->json([
             'message' => 'Application submitted successfully.',
             'application' => $application->load(['job', 'resume']),
@@ -78,10 +84,22 @@ class ApplicationController extends Controller
         // TODO: Add authorization check to ensure user owns the company
         // For MVP, we'll allow any authenticated user to view applications
 
-        $applications = Application::where('job_id', $jobId)
-            ->with(['user', 'resume'])
-            ->orderBy('applied_at', 'desc')
-            ->get();
+        $query = Application::where('job_id', $jobId)
+            ->with(['user', 'resume']);
+
+        // Handle sorting
+        $sortBy = $request->query('sort_by', 'applied_at');
+        $sortOrder = $request->query('sort_order', 'desc');
+
+        if ($sortBy === 'score') {
+            // Sort by score: nulls last (database-agnostic approach)
+            $query->orderByRaw('CASE WHEN score IS NULL THEN 1 ELSE 0 END')
+                  ->orderBy('score', 'desc');
+        } else {
+            $query->orderBy($sortBy, $sortOrder);
+        }
+
+        $applications = $query->get();
 
         return response()->json([
             'job' => $job,

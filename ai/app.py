@@ -4,6 +4,7 @@ FastAPI AI Service for Job Description Generation
 import os
 import json
 import httpx
+import numpy as np
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -81,6 +82,23 @@ class AnalyzeCvResponse(BaseModel):
     skills: List[str] = Field(default_factory=list, description="List of skills")
     experiences: List[ExperienceItem] = Field(default_factory=list, description="Work experience")
     education: List[EducationItem] = Field(default_factory=list, description="Education history")
+
+
+class MatchRequest(BaseModel):
+    job_id: str = Field(..., description="Job ID")
+    job_description: str = Field(..., description="Job description text")
+    candidate_resume_parsed_json: Dict[str, Any] = Field(..., description="Parsed resume JSON from analyze-cv endpoint")
+
+
+class MatchedSkill(BaseModel):
+    skill: str = Field(..., description="Skill name")
+    relevance: float = Field(..., description="Relevance score (0-1)")
+
+
+class MatchResponse(BaseModel):
+    match_score: float = Field(..., description="Match score from 0-100")
+    top_skills: List[MatchedSkill] = Field(..., description="Top 3 matched skills with explanations")
+    explanation: str = Field(..., description="Short explanation of the match")
 
 
 # Endpoints
@@ -320,5 +338,155 @@ Return ONLY valid JSON, no additional text or explanation."""
         raise HTTPException(
             status_code=500,
             detail=f"Error analyzing CV: {str(e)}"
+        )
+
+
+def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
+    """Calculate cosine similarity between two vectors."""
+    vec1 = np.array(vec1)
+    vec2 = np.array(vec2)
+    
+    dot_product = np.dot(vec1, vec2)
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+    
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+    
+    return float(dot_product / (norm1 * norm2))
+
+
+def get_embedding(text: str, client: OpenAI) -> List[float]:
+    """Get embedding for text using OpenAI."""
+    try:
+        response = client.embeddings.create(
+            model="text-embedding-3-small",  # Using the smaller, cheaper model
+            input=text
+        )
+        return response.data[0].embedding
+    except Exception as e:
+        raise Exception(f"Failed to get embedding: {str(e)}")
+
+
+@app.post("/ai/match", response_model=MatchResponse)
+async def match_candidate(request: MatchRequest):
+    """
+    Match a candidate's resume against a job description using OpenAI embeddings.
+    
+    Accepts job_id, job_description, and candidate_resume_parsed_json.
+    Returns match_score (0-100) and explanation of top 3 matched skills.
+    """
+    if not openai_client:
+        raise HTTPException(
+            status_code=500,
+            detail="OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
+        )
+    
+    try:
+        # Validate job description
+        if not request.job_description or not request.job_description.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Job description cannot be empty"
+            )
+        
+        # Extract candidate information from parsed JSON
+        candidate_skills = request.candidate_resume_parsed_json.get("skills", [])
+        candidate_experiences = request.candidate_resume_parsed_json.get("experiences", [])
+        candidate_education = request.candidate_resume_parsed_json.get("education", [])
+        
+        # Build candidate summary text
+        candidate_text_parts = []
+        
+        # Add skills
+        if candidate_skills:
+            candidate_text_parts.append("Skills: " + ", ".join(candidate_skills))
+        
+        # Add experience summaries
+        if candidate_experiences:
+            exp_texts = []
+            for exp in candidate_experiences:
+                exp_text = f"{exp.get('title', '')} at {exp.get('company', '')}"
+                if exp.get('summary'):
+                    exp_text += f": {exp.get('summary', '')}"
+                exp_texts.append(exp_text)
+            candidate_text_parts.append("Experience: " + ". ".join(exp_texts))
+        
+        # Add education
+        if candidate_education:
+            edu_texts = []
+            for edu in candidate_education:
+                edu_parts = []
+                if edu.get('degree'):
+                    edu_parts.append(edu.get('degree'))
+                if edu.get('field'):
+                    edu_parts.append(edu.get('field'))
+                if edu.get('institution'):
+                    edu_parts.append(f"from {edu.get('institution')}")
+                if edu_parts:
+                    edu_texts.append(", ".join(edu_parts))
+            if edu_texts:
+                candidate_text_parts.append("Education: " + ". ".join(edu_texts))
+        
+        candidate_text = ". ".join(candidate_text_parts)
+        
+        if not candidate_text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Candidate resume must have at least skills, experience, or education information"
+            )
+        
+        # Get embeddings
+        job_embedding = get_embedding(request.job_description, openai_client)
+        candidate_embedding = get_embedding(candidate_text, openai_client)
+        
+        # Calculate cosine similarity
+        similarity = cosine_similarity(job_embedding, candidate_embedding)
+        
+        # Convert similarity (-1 to 1) to match score (0 to 100)
+        # Normalize: similarity of 1.0 = 100, similarity of 0.0 = 50, similarity of -1.0 = 0
+        match_score = max(0, min(100, (similarity + 1) * 50))
+        
+        # Find top matched skills by comparing individual skill embeddings with job description
+        top_skills = []
+        if candidate_skills:
+            skill_scores = []
+            for skill in candidate_skills[:20]:  # Limit to first 20 skills for performance
+                try:
+                    skill_embedding = get_embedding(skill, openai_client)
+                    skill_similarity = cosine_similarity(job_embedding, skill_embedding)
+                    skill_scores.append({
+                        'skill': skill,
+                        'relevance': max(0, min(1, (skill_similarity + 1) / 2))  # Normalize to 0-1
+                    })
+                except Exception as e:
+                    # Skip skills that fail to embed
+                    continue
+            
+            # Sort by relevance and take top 3
+            skill_scores.sort(key=lambda x: x['relevance'], reverse=True)
+            top_skills = skill_scores[:3]
+        
+        # Generate explanation
+        if top_skills:
+            skill_names = [s['skill'] for s in top_skills]
+            explanation = f"Top matched skills: {', '.join(skill_names)}. "
+        else:
+            explanation = "Match based on overall profile similarity. "
+        
+        explanation += f"Overall match score: {match_score:.1f}/100 based on semantic similarity between job requirements and candidate profile."
+        
+        return MatchResponse(
+            match_score=round(match_score, 2),
+            top_skills=[MatchedSkill(skill=s['skill'], relevance=round(s['relevance'], 3)) for s in top_skills],
+            explanation=explanation
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error matching candidate: {str(e)}"
         )
 

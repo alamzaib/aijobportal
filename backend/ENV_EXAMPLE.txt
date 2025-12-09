@@ -47,6 +47,11 @@ REDIS_CACHE_DB=1
 
 MEMCACHED_HOST=127.0.0.1
 
+# Meilisearch Configuration
+SCOUT_DRIVER=meilisearch
+MEILISEARCH_HOST=http://localhost:7700
+MEILISEARCH_KEY=masterKey
+
 # AWS S3 Configuration for Resume Storage
 AWS_ACCESS_KEY_ID=your-access-key-id
 AWS_SECRET_ACCESS_KEY=your-secret-access-key

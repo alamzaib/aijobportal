@@ -8,10 +8,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Laravel\Scout\Searchable;
 
 class Job extends Model
 {
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids, Searchable;
 
     protected $keyType = 'string';
     public $incrementing = false;
@@ -62,6 +63,72 @@ class Job extends Model
     public function aiJob(): HasOne
     {
         return $this->hasOne(AIJob::class);
+    }
+
+    /**
+     * Get the indexable data array for the model.
+     *
+     * @return array<string, mixed>
+     */
+    public function toSearchableArray(): array
+    {
+        // Load company relationship if not already loaded
+        if (!$this->relationLoaded('company')) {
+            $this->load('company');
+        }
+
+        // Extract skills from requirements or AI suggested skills
+        $skills = [];
+        if ($this->requirements && is_array($this->requirements)) {
+            $skills = $this->requirements;
+        }
+        
+        // Also check AI suggested skills if available
+        if ($this->relationLoaded('aiJob') && $this->aiJob && $this->aiJob->ai_suggested_skills) {
+            $skills = array_merge($skills, $this->aiJob->ai_suggested_skills);
+        } elseif (!$this->relationLoaded('aiJob')) {
+            // Try to load AI job if not loaded
+            try {
+                $this->load('aiJob');
+                if ($this->aiJob && $this->aiJob->ai_suggested_skills) {
+                    $skills = array_merge($skills, $this->aiJob->ai_suggested_skills);
+                }
+            } catch (\Exception $e) {
+                // AI job table might not exist, ignore
+            }
+        }
+        
+        // Extract city from location (format: "City, State" or "City, Country")
+        $locationCity = null;
+        if ($this->location) {
+            $locationParts = explode(',', $this->location);
+            $locationCity = trim($locationParts[0]);
+        }
+
+        return [
+            'id' => $this->id,
+            'title' => $this->title,
+            'description' => $this->description,
+            'location' => $this->location,
+            'location_city' => $locationCity,
+            'skills' => array_unique($skills),
+            'company_name' => $this->company ? $this->company->name : null,
+            'company_id' => $this->company_id,
+            'type' => $this->type,
+            'salary_min' => $this->salary_min,
+            'salary_max' => $this->salary_max,
+            'salary_currency' => $this->salary_currency,
+            'posted_at' => $this->posted_at ? $this->posted_at->timestamp : null,
+            'is_active' => $this->is_active,
+        ];
+    }
+
+    /**
+     * Determine if the model should be searchable.
+     */
+    public function shouldBeSearchable(): bool
+    {
+        return $this->is_active;
     }
 
     /**

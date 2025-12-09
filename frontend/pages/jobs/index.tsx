@@ -60,6 +60,8 @@ export default function JobsPage({ initialJobs, totalPages, currentPage, initial
     search: (router.query.search as string) || '',
     location: (router.query.location as string) || '',
     type: (router.query.type as string) || '',
+    salary_min: (router.query.salary_min as string) || '',
+    salary_max: (router.query.salary_max as string) || '',
   });
   const isInitialMount = useRef(true);
 
@@ -109,6 +111,8 @@ export default function JobsPage({ initialJobs, totalPages, currentPage, initial
         const querySearch = (router.query.search as string) || '';
         const queryLocation = (router.query.location as string) || '';
         const queryType = (router.query.type as string) || '';
+        const querySalaryMin = (router.query.salary_min as string) || '';
+        const querySalaryMax = (router.query.salary_max as string) || '';
 
         const params = new URLSearchParams();
         params.append('page', queryPage);
@@ -117,6 +121,8 @@ export default function JobsPage({ initialJobs, totalPages, currentPage, initial
         if (querySearch) params.append('search', querySearch);
         if (queryLocation) params.append('location', queryLocation);
         if (queryType) params.append('type', queryType);
+        if (querySalaryMin) params.append('salary_min', querySalaryMin);
+        if (querySalaryMax) params.append('salary_max', querySalaryMax);
 
         const response = await apiClient.get<PaginatedResponse>(`/jobs?${params.toString()}`);
         const formattedJobs = response.data.map(formatJob);
@@ -127,6 +133,8 @@ export default function JobsPage({ initialJobs, totalPages, currentPage, initial
           search: querySearch,
           location: queryLocation,
           type: queryType,
+          salary_min: querySalaryMin,
+          salary_max: querySalaryMax,
         });
       } catch (err) {
         setError(getErrorMessage(err));
@@ -137,7 +145,7 @@ export default function JobsPage({ initialJobs, totalPages, currentPage, initial
     };
 
     fetchJobs();
-  }, [router.query.page, router.query.search, router.query.location, router.query.type, router.isReady]);
+  }, [router.query.page, router.query.search, router.query.location, router.query.type, router.query.salary_min, router.query.salary_max, router.isReady]);
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -164,41 +172,102 @@ export default function JobsPage({ initialJobs, totalPages, currentPage, initial
             <p className="text-gray-600">Browse all available job opportunities</p>
           </div>
 
-          {/* Filters */}
+          {/* Enhanced Search & Filters */}
           <div className="bg-white rounded-lg shadow-md p-6 mb-8">
             <form onSubmit={handleFilterSubmit}>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <input
-                  type="text"
-                  placeholder="Search by title..."
-                  value={filters.search}
-                  onChange={(e) => handleFilterChange('search', e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <input
-                  type="text"
-                  placeholder="Location"
-                  value={filters.location}
-                  onChange={(e) => handleFilterChange('location', e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <select
-                  value={filters.type}
-                  onChange={(e) => handleFilterChange('type', e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Job Type</option>
-                  <option value="full-time">Full-time</option>
-                  <option value="part-time">Part-time</option>
-                  <option value="contract">Contract</option>
-                  <option value="internship">Internship</option>
-                </select>
-                <button
-                  type="submit"
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
-                >
-                  Filter
-                </button>
+              <div className="space-y-4">
+                {/* Main Search Bar */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search jobs by title, description, skills, or company..."
+                    value={filters.search}
+                    onChange={(e) => handleFilterChange('search', e.target.value)}
+                    className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                  />
+                  <svg
+                    className="absolute left-3 top-3.5 h-5 w-5 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+
+                {/* Filter Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <input
+                    type="text"
+                    placeholder="Location (City)"
+                    value={filters.location}
+                    onChange={(e) => handleFilterChange('location', e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <select
+                    value={filters.type}
+                    onChange={(e) => handleFilterChange('type', e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">All Job Types</option>
+                    <option value="full-time">Full-time</option>
+                    <option value="part-time">Part-time</option>
+                    <option value="contract">Contract</option>
+                    <option value="freelance">Freelance</option>
+                    <option value="internship">Internship</option>
+                  </select>
+                  <input
+                    type="number"
+                    placeholder="Min Salary"
+                    value={filters.salary_min}
+                    onChange={(e) => handleFilterChange('salary_min', e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    min="0"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Max Salary"
+                    value={filters.salary_max}
+                    onChange={(e) => handleFilterChange('salary_max', e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    min="0"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      className="flex-1 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-medium"
+                    >
+                      Search
+                    </button>
+                    {(filters.search || filters.location || filters.type || filters.salary_min || filters.salary_max) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFilters({
+                            search: '',
+                            location: '',
+                            type: '',
+                            salary_min: '',
+                            salary_max: '',
+                          });
+                          router.push({
+                            pathname: '/jobs',
+                            query: { page: 1 },
+                          });
+                        }}
+                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                        title="Clear filters"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </form>
           </div>
@@ -231,7 +300,10 @@ export default function JobsPage({ initialJobs, totalPages, currentPage, initial
               {totalPages > 1 && (
                 <div className="flex justify-center gap-2">
                   <button
-                    onClick={() => router.push(`/jobs?page=${currentPage - 1}`)}
+                    onClick={() => {
+                      const query = { ...router.query, page: currentPage - 1 };
+                      router.push({ pathname: '/jobs', query });
+                    }}
                     disabled={currentPage === 1}
                     className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                   >
@@ -240,7 +312,10 @@ export default function JobsPage({ initialJobs, totalPages, currentPage, initial
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <button
                       key={page}
-                      onClick={() => router.push(`/jobs?page=${page}`)}
+                      onClick={() => {
+                        const query = { ...router.query, page };
+                        router.push({ pathname: '/jobs', query });
+                      }}
                       className={`px-4 py-2 border rounded-lg ${
                         currentPage === page
                           ? 'bg-blue-600 text-white border-blue-600'
@@ -251,7 +326,10 @@ export default function JobsPage({ initialJobs, totalPages, currentPage, initial
                     </button>
                   ))}
                   <button
-                    onClick={() => router.push(`/jobs?page=${currentPage + 1}`)}
+                    onClick={() => {
+                      const query = { ...router.query, page: currentPage + 1 };
+                      router.push({ pathname: '/jobs', query });
+                    }}
                     disabled={currentPage === totalPages}
                     className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                   >
@@ -285,6 +363,8 @@ export const getServerSideProps: GetServerSideProps = async ({ query }) => {
     if (query.search) params.append('search', query.search as string);
     if (query.location) params.append('location', query.location as string);
     if (query.type) params.append('type', query.type as string);
+    if (query.salary_min) params.append('salary_min', query.salary_min as string);
+    if (query.salary_max) params.append('salary_max', query.salary_max as string);
 
     const response = await fetch(`${API_URL}/jobs?${params.toString()}`, {
       headers: {

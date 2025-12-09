@@ -2,6 +2,8 @@
 
 $allowedOrigins = env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:3001');
 $origins = $allowedOrigins ? explode(',', $allowedOrigins) : ['http://localhost:3000'];
+// Trim whitespace from each origin
+$origins = array_map('trim', $origins);
 
 return [
     'paths' => ['api/*', 'sanctum/csrf-cookie'],

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreResumeRequest;
+use App\Jobs\AnalyzeCvJob;
 use App\Jobs\ScanResumeJob;
 use App\Models\Resume;
 use Illuminate\Http\JsonResponse;
@@ -106,6 +107,18 @@ class ResumeController extends Controller
                 ScanResumeJob::dispatch($resume->id)->onConnection('sync');
             } catch (\Exception $e) {
                 \Log::warning('Failed to dispatch scan job', [
+                    'resume_id' => $resume->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                // Continue even if job dispatch fails - this is not critical
+            }
+
+            // Dispatch CV analysis job
+            try {
+                AnalyzeCvJob::dispatch($resume->id)->onConnection('sync');
+            } catch (\Exception $e) {
+                \Log::warning('Failed to dispatch CV analysis job', [
                     'resume_id' => $resume->id,
                     'error' => $e->getMessage(),
                     'trace' => $e->getTraceAsString(),

@@ -32,6 +32,7 @@ class Resume extends Model
         'skills' => 'array',
         'experience' => 'array',
         'education' => 'array',
+        'parsed_json' => 'array',
         'is_default' => 'boolean',
     ];
 

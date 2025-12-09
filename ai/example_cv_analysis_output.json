@@ -1,0 +1,55 @@
+{
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "phone": "+1-555-123-4567",
+  "skills": [
+    "Python",
+    "JavaScript",
+    "React",
+    "Node.js",
+    "PostgreSQL",
+    "Docker",
+    "AWS",
+    "Git",
+    "RESTful APIs",
+    "Agile/Scrum"
+  ],
+  "experiences": [
+    {
+      "company": "Tech Solutions Inc.",
+      "title": "Senior Software Engineer",
+      "from": "2021-01",
+      "to": "Present",
+      "summary": "Led development of microservices architecture using Python and Node.js. Improved system performance by 40% through optimization. Mentored junior developers and implemented CI/CD pipelines using Docker and AWS."
+    },
+    {
+      "company": "StartupXYZ",
+      "title": "Full Stack Developer",
+      "from": "2019-06",
+      "to": "2020-12",
+      "summary": "Developed and maintained web applications using React and Node.js. Collaborated with cross-functional teams to deliver features on time. Implemented automated testing reducing bugs by 30%."
+    },
+    {
+      "company": "WebDev Agency",
+      "title": "Junior Developer",
+      "from": "2018-01",
+      "to": "2019-05",
+      "summary": "Built responsive web applications using HTML, CSS, and JavaScript. Worked on client projects and learned modern development practices."
+    }
+  ],
+  "education": [
+    {
+      "institution": "State University",
+      "degree": "Bachelor's",
+      "field": "Computer Science",
+      "year": "2017"
+    },
+    {
+      "institution": "Tech Bootcamp",
+      "degree": "Certificate",
+      "field": "Full Stack Web Development",
+      "year": "2018"
+    }
+  ]
+}
+

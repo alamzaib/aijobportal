@@ -67,5 +67,26 @@ class ApplicationController extends Controller
             'application' => $application->load(['job', 'resume']),
         ], 201);
     }
+
+    /**
+     * Get applications for a specific job (for employers).
+     */
+    public function forJob(Request $request, string $jobId): JsonResponse
+    {
+        $job = Job::with('company')->findOrFail($jobId);
+
+        // TODO: Add authorization check to ensure user owns the company
+        // For MVP, we'll allow any authenticated user to view applications
+
+        $applications = Application::where('job_id', $jobId)
+            ->with(['user', 'resume'])
+            ->orderBy('applied_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'job' => $job,
+            'applications' => $applications,
+        ]);
+    }
 }
 

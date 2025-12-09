@@ -2,7 +2,9 @@
 FastAPI AI Service for Job Description Generation
 """
 import os
-from typing import Optional
+import json
+import httpx
+from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -50,6 +52,35 @@ class GenerateJobDescriptionResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str = Field(..., description="Service status")
     openai_configured: bool = Field(..., description="Whether OpenAI API key is configured")
+
+
+class AnalyzeCvRequest(BaseModel):
+    s3_url: Optional[str] = Field(None, description="S3 URL of the CV/resume file")
+    raw_text: Optional[str] = Field(None, description="Raw text content of the CV/resume")
+
+
+class ExperienceItem(BaseModel):
+    company: str = Field(..., description="Company name")
+    title: str = Field(..., description="Job title")
+    from_date: str = Field(..., description="Start date")
+    to_date: str = Field(..., description="End date (or 'Present' if current)")
+    summary: str = Field(..., description="Job description/summary")
+
+
+class EducationItem(BaseModel):
+    institution: str = Field(..., description="School/University name")
+    degree: Optional[str] = Field(None, description="Degree obtained")
+    field: Optional[str] = Field(None, description="Field of study")
+    year: Optional[str] = Field(None, description="Graduation year")
+
+
+class AnalyzeCvResponse(BaseModel):
+    name: str = Field(..., description="Full name")
+    email: str = Field(..., description="Email address")
+    phone: Optional[str] = Field(None, description="Phone number")
+    skills: List[str] = Field(default_factory=list, description="List of skills")
+    experiences: List[ExperienceItem] = Field(default_factory=list, description="Work experience")
+    education: List[EducationItem] = Field(default_factory=list, description="Education history")
 
 
 # Endpoints
@@ -116,5 +147,178 @@ async def generate_job_description(request: GenerateJobDescriptionRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Error generating job description: {str(e)}"
+        )
+
+
+@app.post("/ai/analyze-cv", response_model=AnalyzeCvResponse)
+async def analyze_cv(request: AnalyzeCvRequest):
+    """
+    Analyze a CV/resume and extract structured information.
+    
+    Accepts either an S3 URL or raw text content.
+    Returns standardized JSON with name, email, phone, skills, experiences, and education.
+    """
+    if not openai_client:
+        raise HTTPException(
+            status_code=500,
+            detail="OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
+        )
+    
+    if not request.s3_url and not request.raw_text:
+        raise HTTPException(
+            status_code=400,
+            detail="Either 's3_url' or 'raw_text' must be provided"
+        )
+    
+    try:
+        # Get CV content
+        cv_content = ""
+        
+        if request.raw_text:
+            # Use raw text directly
+            cv_content = request.raw_text
+        elif request.s3_url:
+            # For MVP, we'll try to fetch the file from S3 URL
+            # Note: This assumes the URL is publicly accessible or we have proper auth
+            # In production, you'd want to use proper S3 SDK with credentials
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.get(request.s3_url)
+                    response.raise_for_status()
+                    # For PDF files, we'd need to extract text
+                    # For MVP, assume it's a text file or we'll use OpenAI vision API
+                    # For now, let's use a simple approach: try to decode as text
+                    cv_content = response.text
+            except Exception as e:
+                # If direct fetch fails, we can use OpenAI vision API for PDFs
+                # For MVP, we'll raise an error and suggest using raw_text
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Could not fetch CV from S3 URL. Error: {str(e)}. Please provide raw_text instead."
+                )
+        
+        if not cv_content.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="CV content is empty"
+            )
+        
+        # Build the prompt for OpenAI
+        system_prompt = """You are an expert CV/resume parser. Extract structured information from the provided CV/resume text.
+        
+Return a JSON object with the following structure:
+{
+    "name": "Full Name",
+    "email": "email@example.com",
+    "phone": "phone number or null",
+    "skills": ["skill1", "skill2", ...],
+    "experiences": [
+        {
+            "company": "Company Name",
+            "title": "Job Title",
+            "from": "Start Date (YYYY-MM or YYYY)",
+            "to": "End Date (YYYY-MM or YYYY or 'Present')",
+            "summary": "Job description and key achievements"
+        }
+    ],
+    "education": [
+        {
+            "institution": "School/University Name",
+            "degree": "Degree Type (e.g., Bachelor's, Master's)",
+            "field": "Field of Study",
+            "year": "Graduation Year"
+        }
+    ]
+}
+
+Extract all available information. If a field is not found, use null or empty array/list as appropriate.
+For dates, use consistent format (preferably YYYY-MM or YYYY).
+Return ONLY valid JSON, no additional text or explanation."""
+        
+        user_prompt = f"""Please parse the following CV/resume and extract the structured information:\n\n{cv_content}"""
+        
+        # Call OpenAI API
+        # Try to use a model that supports JSON mode (gpt-3.5-turbo-1106 or newer)
+        # Fallback to regular model if needed
+        result_text = ""
+        try:
+            # Try with JSON mode first (requires gpt-3.5-turbo-1106 or newer)
+            response = openai_client.chat.completions.create(
+                model="gpt-3.5-turbo-1106",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.3,  # Lower temperature for more consistent parsing
+                response_format={"type": "json_object"}  # Force JSON response
+            )
+            result_text = response.choices[0].message.content.strip()
+        except Exception as e:
+            # Fallback to regular model if JSON mode not supported
+            # Extract JSON from text response if needed
+            response = openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": system_prompt + "\n\nIMPORTANT: Return ONLY valid JSON, no additional text or explanation."},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.3
+            )
+            result_text = response.choices[0].message.content.strip()
+            
+            # Try to extract JSON from markdown code blocks if present
+            import re
+            json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', result_text, re.DOTALL)
+            if json_match:
+                result_text = json_match.group(1)
+            else:
+                # Try to find JSON object in the text
+                json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+                if json_match:
+                    result_text = json_match.group(0)
+        
+        # Parse the JSON response
+        parsed_data = json.loads(result_text)
+        
+        # Transform to match our response model
+        # Handle experiences
+        experiences = []
+        for exp in parsed_data.get("experiences", []):
+            experiences.append(ExperienceItem(
+                company=exp.get("company", ""),
+                title=exp.get("title", ""),
+                from_date=exp.get("from", ""),
+                to_date=exp.get("to", ""),
+                summary=exp.get("summary", "")
+            ))
+        
+        # Handle education
+        education = []
+        for edu in parsed_data.get("education", []):
+            education.append(EducationItem(
+                institution=edu.get("institution", ""),
+                degree=edu.get("degree"),
+                field=edu.get("field"),
+                year=edu.get("year")
+            ))
+        
+        return AnalyzeCvResponse(
+            name=parsed_data.get("name", ""),
+            email=parsed_data.get("email", ""),
+            phone=parsed_data.get("phone"),
+            skills=parsed_data.get("skills", []),
+            experiences=experiences,
+            education=education
+        )
+    
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to parse OpenAI response as JSON: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error analyzing CV: {str(e)}"
         )
 

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CompanyJobController;
 use App\Http\Controllers\JobController;
 use App\Http\Controllers\ResumeController;
 use Illuminate\Http\Request;
@@ -57,6 +58,9 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Job management (protected)
     Route::post('/jobs', [JobController::class, 'store']);
+    
+    // Company job generation (protected)
+    Route::post('/companies/{company}/jobs/generate', [CompanyJobController::class, 'generate']);
     
     // Applications
     Route::get('/applications', [ApplicationController::class, 'index']);

@@ -17,7 +17,7 @@ interface LoginResponse {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, user } = useAuth();
+  const { login, user, loading: authLoading } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -26,12 +26,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const csrfCookieFetched = useRef(false);
 
-  // Redirect if already logged in
+  // Redirect if already logged in (but only after auth loading is complete)
   useEffect(() => {
-    if (user) {
+    if (!authLoading && user) {
       router.push('/');
     }
-  }, [user, router]);
+  }, [user, authLoading, router]);
 
   // Pre-fetch CSRF cookie when page loads (optimization)
   useEffect(() => {

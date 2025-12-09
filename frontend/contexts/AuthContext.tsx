@@ -21,9 +21,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   const router = useRouter();
 
   const checkAuth = async () => {
+    setLoading(true);
     try {
       const userData = await apiClient.get<User>('/auth/user');
       setUser(userData);
@@ -39,12 +41,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } finally {
       setLoading(false);
+      setHasCheckedAuth(true);
     }
   };
 
   const login = (userData: User) => {
     setUser(userData);
     setLoading(false);
+    setHasCheckedAuth(true);
   };
 
   const logout = async () => {
@@ -54,12 +58,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Logout error:', error);
     } finally {
       setUser(null);
+      setHasCheckedAuth(false);
       router.push('/auth/login');
     }
   };
 
   useEffect(() => {
-    checkAuth();
+    // Only check auth once on mount if we haven't checked yet
+    if (!hasCheckedAuth && !user) {
+      checkAuth();
+    } else if (user) {
+      // If user is already set, we're not loading
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

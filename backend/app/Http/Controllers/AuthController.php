@@ -88,9 +88,19 @@ class AuthController extends Controller
             // Logout using session
             auth()->logout();
             
-            // Invalidate session
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
+            // Only invalidate session if it exists
+            if ($request->hasSession()) {
+                try {
+                    $session = $request->session();
+                    if ($session->isStarted()) {
+                        $session->invalidate();
+                        $session->regenerateToken();
+                    }
+                } catch (\Exception $sessionException) {
+                    // Log but don't fail if session operations fail
+                    \Log::warning('Session invalidation failed during logout: ' . $sessionException->getMessage());
+                }
+            }
 
             return response()->json([
                 'message' => 'Successfully logged out',
@@ -103,10 +113,14 @@ class AuthController extends Controller
             ]);
 
             // Still try to logout even if session operations fail
-            auth()->logout();
+            try {
+                auth()->logout();
+            } catch (\Exception $logoutException) {
+                \Log::warning('Auth logout failed: ' . $logoutException->getMessage());
+            }
 
             return response()->json([
-                'message' => 'Logged out (session cleanup may have failed)',
+                'message' => 'Logged out',
             ], 200);
         }
     }
